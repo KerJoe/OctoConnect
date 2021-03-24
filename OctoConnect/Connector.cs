@@ -17,7 +17,7 @@ namespace OctoConnect
 {
     public class Connector : PrinterConnectorBase, INotifyPropertyChanged, IDisposable, IPrintJob
     {
-        IHost host;   
+        IHost host;
         IRegMemoryFolder key;
         ConnectionPanel panel;
         WebSocket pushSocket;
@@ -71,20 +71,20 @@ namespace OctoConnect
         {
             var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
             string responseStr = wc.DownloadString(GetUri("job"));
-            return Newtonsoft.Json.Linq.JObject.Parse(responseStr);            
+            return Newtonsoft.Json.Linq.JObject.Parse(responseStr);
         }
 
         public override string Name => "OctoPrint";
 
         public override string Id => "OctoConnect";
 
-        public override int MaxLayer => 0;// ? //throw new NotImplementedException();                
+        public override int MaxLayer => throw new NotImplementedException();
 
         public override IPrintJob Job => this;
 
         public override int InjectedCommands => 0;
 
-        public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
+        public static DateTime unixTimeStampToDateTime(double unixTimeStamp)
         {
             // Unix timestamp is seconds past epoch
             System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
@@ -129,8 +129,10 @@ namespace OctoConnect
 
         public override bool Connect(bool failSilent = false)
         {
-            // TODO: Uniform Request method (JSON vs ?x=y)
-            var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";            
+            // TODO: Uniform Request method (JSON vs ?x=y)                        
+            //con.open();
+            //return true;
+            var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
             try
             {
                 string responseStr = wc.UploadString(GetUri("login"), @"{ ""passive"": true }"); // Log in to get username and session key
@@ -143,9 +145,9 @@ namespace OctoConnect
                 {
                     pushSocket = new WebSocket(GetWS());
                     pushSocket.OnMessage += new EventHandler<MessageEventArgs>(pushSocket_OnMessage);
-                    pushSocket.Connect();
-                }            
-                // TODO: This is stupid
+                }
+                pushSocket.Connect(); // TODO ????
+                // TODO: This is stupid               
                 string auth_message = string.Format(@"( ""auth"": ""{0}:{1}"" )", username, session).Replace('(', '{').Replace(')', '}');
                 pushSocket.Send(auth_message);
 
@@ -154,32 +156,35 @@ namespace OctoConnect
                 responseStr = wc.UploadString(GetUri("connection"), @"{ ""command"": ""connect"" }");
 
                 isConnected = true;
+                con.FireConnectionChange("Connected"); // Only required only in connect, not disconnect (for some reason)
                 return true;
             }
             catch (Exception e)
             {
-                host.LogError(e.ToString());                
-            }
-            return false;
+                isConnected = false;
+                host.LogError(e.ToString());
+                return false;
+            }            
         }
 
         private void pushSocket_OnMessage(object sender, MessageEventArgs e)
         {
-            dynamic response = Newtonsoft.Json.Linq.JObject.Parse(e.Data);            
+            dynamic response = Newtonsoft.Json.Linq.JObject.Parse(e.Data);
             try {
                 var logs = response["current"]["logs"];
                 foreach (string logline in logs)
                 {
-                    //host.LogInfo(logline);
+                    host.LogInfo(logline);
+                    if (logline.StartsWith("Send: "))
+                    {
+                        con.Analyzer.Analyze(new GCode(logline.Remove(0, 6)), false); 
+                    }
                     if (logline.StartsWith("Recv: "))
                     {
                         var test = RepetierHostExtender.basic.LogLevel.DEFAULT;
-                        host.LogInfo(logline.Remove(0, 6));
                         con.analyzeResponse(logline.Remove(0, 6), ref test);
                     }
                 }
-                
-                //for (int i = 0; i < )                
             } catch (Exception) { }
         }
 
@@ -208,7 +213,8 @@ namespace OctoConnect
 
         public override bool Disconnect(bool force)
         {
-            //throw new NotImplementedException();
+            if (pushSocket != null) pushSocket.Close();
+            isConnected = false;
             return true;
         }
 
@@ -229,7 +235,7 @@ namespace OctoConnect
 
         public override void Emergency()
         {
-            //throw new NotImplementedException();
+            InjectManualCommandFirst("M112");
         }
 
         private ManualResetEvent injectLock = new ManualResetEvent(true);
@@ -261,12 +267,11 @@ namespace OctoConnect
             var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
             // TODO: This is stupid
             string command_message = string.Format(@"( ""command"": ""{0}"" )", command).Replace('(', '{').Replace(')', '}');
-            wc.UploadString(GetUri("printer/command"), command_message);
+            wc.UploadString(GetUri("printer/command"), command_message); // TODO: Exception handling            
         }
 
         public override void InjectManualCommandFirst(string command)
         {
-            //throw new NotImplementedException();
             InjectManualCommand(command);
         }
 
@@ -276,14 +281,12 @@ namespace OctoConnect
             InjectManualCommand(command);
         }
 
-        bool isRunning = false;
-
         public override void KillJob()
         {
             //throw new NotImplementedException();
             // TODO: Test if paused
             var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-            string responseStr = wc.UploadString(GetUri("connection"), @"{ ""command"": ""cancel"" }");            
+            string responseStr = wc.UploadString(GetUri("connection"), @"{ ""command"": ""cancel"" }");
         }
 
         public override void PauseJob(string text)
@@ -298,7 +301,7 @@ namespace OctoConnect
             throw new NotImplementedException();
         }
 
-        public override void ReturnInjectLock()        
+        public override void ReturnInjectLock()
         {
             // ?
             //throw new NotImplementedException();
@@ -308,8 +311,8 @@ namespace OctoConnect
         public override void RunJob()
         {
             string preferredSaveName = host.GCodeEditor.PreferredSaveName;
-            if (preferredSaveName == null) return;            
-            
+            if (preferredSaveName == null) return;
+
             string filePath = System.IO.Path.GetTempPath() + preferredSaveName + ".gcode";
             StreamWriter file = File.CreateText(filePath);
             file.Write(host.GCodeEditor.getContent());
@@ -322,8 +325,6 @@ namespace OctoConnect
             wc.Headers[HttpRequestHeader.ContentType] = "application/json";
             wc.UploadString(GetUri(string.Format("files/local/{0}.gcode", preferredSaveName)), @"{ ""command"": ""select"", ""print"": ""true"" }"); // Select and start File
         }
-
-
 
         public override void SetConfiguration(IRegMemoryFolder _key)
         {
@@ -367,55 +368,62 @@ namespace OctoConnect
             if (periodicalCounter >= 1000000)
                 periodicalCounter = 0;
 
-            if (periodicalCounter % jobUpdateDivider == 0)
-            {
-                jobJson = getJobJSON();
-
-                isJobRunning = (jobJson["state"] != "Operational");
-                isPaused = (jobJson["state"] == "Pausing" || jobJson["state"] == "Paused");
-
-                percentDone = ifNullThenZero(jobJson["progress"]["completion"]) * 100;
-                eta = jobJson["job"]["estimatedPrintTime"];
-                jobStarted = UnixTimeStampToDateTime(ifNullThenZero(jobJson["progress"]["completion"]));
-                switch (getJobJSON()["state"]) // TODO: Check if correct
+            if (isConnected)
+                if (periodicalCounter % jobUpdateDivider == 0)
                 {
-                    case "Printing":
-                    case "Pausing":
-                    case "Paused":
-                        mode = PrintJobMode.PRINTING; break;
-                    case "Operational":
-                        mode = PrintJobMode.FINISHED; break;
-                    case "Error":
-                    case "Cancelling":
-                        mode = PrintJobMode.ABORTED; break;
-                    case "Offline":
-                    default:
-                        mode = PrintJobMode.NO_JOB_DEFINED; break;
+                    jobJson = getJobJSON();
+
+                    isJobRunning = (jobJson["state"] != "Operational");
+                    isPaused = (jobJson["state"] == "Pausing" || jobJson["state"] == "Paused");
+
+                    percentDone = ifNullThenZero(jobJson["progress"]["completion"]) * 100;
+                    eta = ifNullThenEmpty(jobJson["job"]["estimatedPrintTime"]);
+                    jobStarted = unixTimeStampToDateTime((double)ifNullThenZero(jobJson["progress"]["completion"]));
+                    jobFinished = unixTimeStampToDateTime((double)ifNullThenZero(jobJson["job"]["date"] + jobJson["job"]["estimatedPrintTime"])); // TODO: Another way not using calculation
+                    lastPrintingTime = jobFinished.ToString();
+
+                    switch ((string)jobJson["state"]) // TODO: Check if correct
+                    {
+                        case "Printing":
+                        case "Pausing":
+                        case "Paused":
+                            mode = PrintJobMode.PRINTING; break;
+                        case "Operational":
+                            mode = PrintJobMode.FINISHED; break;
+                        case "Error":
+                        case "Cancelling":
+                            mode = PrintJobMode.ABORTED; break;
+                        case "Offline":
+                        default:
+                            mode = PrintJobMode.NO_JOB_DEFINED; break;
+                    }
+                    // TODO: Find actual lines not bytes
+                    linesSendJob  = jobJson["progress"]["filepos"]; 
+                    totalLinesJob = jobJson["job"]["size"];
+
+                    // TODO: Add additional printer state feedback (heaters, position, etc)
                 }
-            }
         }
 
 
 
         bool isConnected = false;   public override bool IsConnected() => isConnected;
-
-        bool isJobRunning = false;  public override bool IsJobRunning() => isJobRunning;
-
-        bool isPaused = false;      public override bool IsPaused => isPaused;
+        bool isJobRunning = false;  public override bool IsJobRunning() => false;//isJobRunning;
+        bool isPaused = false;      public override bool IsPaused => false;//isPaused;
 
 
 
         // IPrintJob
         float percentDone;      public float PercentDone => percentDone;
+        int linesSendJob;       public int LinesSend => linesSendJob;
+        int totalLinesJob;      public int TotalLines => totalLinesJob;
         string eta;             public override string ETA => eta;
-        DateTime jobStarted;    public DateTime JobStarted => jobStarted;        
+        DateTime jobStarted;    public DateTime JobStarted => jobStarted;
+        DateTime jobFinished;   public DateTime JobFinished => jobFinished;
         PrintJobMode mode;      public PrintJobMode Mode => mode;
-        public DateTime JobFinished => throw new NotImplementedException();    // TODO: UnixTimeStampToDateTime(getJobJSON()["job"]["date"] + getJobJSON()["job"]["estimatedPrintTime"]);
-        public string LastPrintingTime => throw new NotImplementedException(); // TODO: UnixTimeStampToDateTime(getJobJSON()["job"]["date"] + getJobJSON()["job"]["estimatedPrintTime"]);
-        public override bool ETAModeNormal { get => true; set => throw new NotImplementedException(); } // TODO
-        public int LinesSend => throw new NotImplementedException();  // TODO: return getJobJSON()["progress"]["filepos"];
-        public int TotalLines => throw new NotImplementedException(); // TODO: return getJobJSON()["job"]["size"];        
+        string lastPrintingTime;public string LastPrintingTime => lastPrintingTime;        
         public bool Caching => false;
         public bool Exclusive => false;
+        public override bool ETAModeNormal { get => true; set => throw new NotImplementedException(); } // TODO    
     }
 }
