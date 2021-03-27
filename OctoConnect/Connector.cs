@@ -29,7 +29,7 @@ namespace OctoConnect
         public override string Name => "OctoPrint";
         public override string Id => "OctoConnect";
         public override IPrintJob Job => this;
-        public override bool HasInjectedMCommand(int code) => false; // ?
+        public override bool HasInjectedMCommand(int code) => false;
         public override int InjectedCommands => 0;
         public override int MaxLayer => throw new NotImplementedException(); // ?
         public double ComputedPrintingTime => throw new NotImplementedException(); // ?
@@ -40,7 +40,6 @@ namespace OctoConnect
 
 
 
-        string jobGcode = "";
         // IPrintJob interface implementation
         float percentDone; public float PercentDone => percentDone;
         int linesSendJob; public int LinesSend => linesSendJob;
@@ -52,7 +51,7 @@ namespace OctoConnect
         string lastPrintingTime; public string LastPrintingTime => lastPrintingTime;
         public bool Caching => false;
         public bool Exclusive => false;
-        public override bool ETAModeNormal { get => true; set => throw new NotImplementedException(); } // TODO: ?    
+        public override bool ETAModeNormal { get => true; set => throw new NotImplementedException(); } // ?    
 
 
 
@@ -140,7 +139,7 @@ namespace OctoConnect
             }
             pushSocket.Connect();            
             string auth_message = string.Format(@"{{ ""auth"": ""{0}:{1}"" }}", username, session);
-            pushSocket.Send(auth_message); // TODO: Test if successfully connected ?s
+            pushSocket.Send(auth_message); // TODO: Test if successfully connected ?
 
             // Connect Serial Printer
             wc.Headers[HttpRequestHeader.ContentType] = "application/json";
@@ -148,13 +147,12 @@ namespace OctoConnect
 
             isConnected = true;
             host.UpdateJobButtons();
-            con.FireConnectionChange("Connected"); // Only required only in Connect, not Disconnect
+            con.FireConnectionChange("Connected"); // Only required in Connect, not Disconnect
             host.ClearPrintPreview();
             return true;
         }
         public override bool Disconnect(bool force)
         {
-            // TODO: Complete
             isConnected = false;
             if (pushSocket != null) pushSocket.Close();            
             return true;
@@ -202,7 +200,7 @@ namespace OctoConnect
                     }
                     if (logline.StartsWith("Recv: "))
                     {
-                        var test = RepetierHostExtender.basic.LogLevel.INFO;//.DEFAULT;
+                        var test = RepetierHostExtender.basic.LogLevel.DEFAULT;
                         con.analyzeResponse(logline.Remove(0, 6), ref test);
                     }
                 }
@@ -328,7 +326,7 @@ namespace OctoConnect
             string filename = host.GCodeEditor.PreferredSaveName;
             if (filename == null) return;
 
-            // TODO: Send string Not temp file
+            // TODO: Send string Not temp file ?
             string filepath = System.IO.Path.GetTempPath() + filename + ".gcode";
             StreamWriter file = File.CreateText(filepath);
             file.Write(host.GCodeEditor.getContent());
