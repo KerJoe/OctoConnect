@@ -17,164 +17,79 @@ namespace OctoConnect
 {
     public class Connector : PrinterConnectorBase, INotifyPropertyChanged, IDisposable, IPrintJob
     {
-        public override int MaxLayer => throw new NotImplementedException();
-
-        public double ComputedPrintingTime => throw new NotImplementedException();
-        
-
-
-        public override void Activate()
-        {
-            // ?
-            this.host.ShowHostComponent("OPConnect", false);
-        }
-        public override void Deactivate()
-        {
-            // ?
-            this.host.HideHostComponent("OPConnect"); 
-        }
-
-
-
-        public override void AnalyzeResponse(string res)
-        {
-            var test = RepetierHostExtender.basic.LogLevel.DEFAULT;
-            con.analyzeResponse(res, ref test);
-            //throw new NotImplementedException();
-        }
-
-        /*public string Headers
-        {
-            get
-            {
-                return string.Format(@"{
-                    ""Content-Type"": ""application/json"",
-                    ""X-Api-Key"": ""{0}""
-                }", apikey);
-            }            
-        }*/
-        string removeChecksumGCode(string gcodeStr)
-        {
-            if (gcodeStr.IndexOf('*') > 0)
-                return gcodeStr.Substring(0, gcodeStr.IndexOf('*'));
-            else
-                return gcodeStr;
-        }        
-        private void pushSocket_OnMessage(object sender, MessageEventArgs e) // TODO: Buffer (Some log messages are skipped) ?
-        {
-            dynamic response = Newtonsoft.Json.Linq.JObject.Parse(e.Data);
-            try {
-                var logs = response["current"]["logs"];
-                foreach (string logline in logs)
-                {
-                    host.LogInfo(logline);
-
-                    if (logline.StartsWith("Send: "))
-                    {
-                        con.Analyzer.Analyze(new GCode(removeChecksumGCode(logline.Remove(0, 6))), false);
-                        con.Analyzer.FireChanged();
-                    }
-                    if (logline.StartsWith("Recv: "))
-                    {
-                        var test = RepetierHostExtender.basic.LogLevel.DEFAULT;
-                        con.analyzeResponse(logline.Remove(0, 6), ref test);
-                    }
-                }
-            } catch (Exception) { }
-        }
-
-
-
-        public override void ToggleETAMode()
-        {
-            //throw new NotImplementedException();
-        }
-
-        public override void TrySendNextLine()
-        {
-            //throw new NotImplementedException();
-        }
-
-        public override void Emergency()
-        {
-            InjectManualCommandFirst("M112");
-        }        
-
-
-
-        public override void InjectManualCommand(string command)
-        {
-            if (!isConnected) return;
-            //throw new NotImplementedException();
-            var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-            // TODO: This is stupid
-            string command_message = string.Format(@"( ""command"": ""{0}"" )", command).Replace('(', '{').Replace(')', '}');
-            wc.UploadString(GetUri("printer/command"), command_message); // TODO: Exception handling            
-        }
-        public override void InjectManualCommandFirst(string command)
-        {
-            InjectManualCommand(command);
-        }
-        public override void InjectManualCommandReplace(string command)
-        {
-            // ?
-            InjectManualCommand(command);
-        }
-        public override void ResendLine(int line)
-        {
-            throw new NotImplementedException();
-        }
-        public override bool HasInjectedMCommand(int code)
-        {
-            // ? throw new NotImplementedException();
-            return false;
-        }
-
-
-
-        private ManualResetEvent injectLock = new ManualResetEvent(true);
-        public override void GetInjectLock()
-        {
-            // ?            
-            try
-            {
-                injectLock.WaitOne();
-                injectLock.Reset();
-            }
-            catch (Exception ex)
-            {
-                host.SetPrinterAction(ex.ToString());
-            }
-        }
-        public override void ReturnInjectLock()
-        {
-            // ?
-            injectLock.Set();
-        }
-
-
-
-
-
-
-
-
-
         IHost host;
         IPrinterConnection con;
         IRegMemoryFolder key;
         ConnectionPanel panel;
         WebSocket pushSocket;
         dynamic jobJson;
+
+
+
+        public override string Name => "OctoPrint";
+        public override string Id => "OctoConnect";
+        public override IPrintJob Job => this;
+        public override bool HasInjectedMCommand(int code) => false; // ?
+        public override int InjectedCommands => 0;
+        public override int MaxLayer => throw new NotImplementedException(); // ?
+        public double ComputedPrintingTime => throw new NotImplementedException(); // ?
+        bool isConnected = false; public override bool IsConnected() => isConnected;
+        bool isJobRunning = false; public override bool IsJobRunning() => isJobRunning;
+        bool isPaused = false; public override bool IsPaused => isPaused;
+        //public override bool ServerConnection => true; // TODO: Decide to use or not to use server connection type
+
+
+
+        string jobGcode = "";
+        // IPrintJob interface implementation
+        float percentDone; public float PercentDone => percentDone;
+        int linesSendJob; public int LinesSend => linesSendJob;
+        int totalLinesJob; public int TotalLines => totalLinesJob;
+        string eta; public override string ETA => eta;
+        DateTime jobStarted; public DateTime JobStarted => jobStarted;
+        DateTime jobFinished; public DateTime JobFinished => jobFinished;
+        PrintJobMode mode; public PrintJobMode Mode => mode;
+        string lastPrintingTime; public string LastPrintingTime => lastPrintingTime;
+        public bool Caching => false;
+        public bool Exclusive => false;
+        public override bool ETAModeNormal { get => true; set => throw new NotImplementedException(); } // TODO: ?    
+
+
+
         public Connector(IHost _host)
         {
             host = _host;
-            con = host.Connection;
+            con  = host.Connection;
+        }
+        ~Connector()
+        {
+            Dispose();
         }
         public void Dispose()
         {
-            //throw new NotImplementedException();
+            if (panel != null)
+            {
+                panel.Dispose();
+            }
+            if (pushSocket != null)
+            {
+                if (isConnected)
+                {
+                    pushSocket.Close();
+                }
+                pushSocket = null;
+                isConnected = false;
+            }
+            if (injectLock != null)
+            {
+                injectLock.Dispose();
+            }
         }
+
+
+
+        public override void Activate() { }
+        public override void Deactivate() { }
 
 
 
@@ -190,49 +105,211 @@ namespace OctoConnect
         {
             // TODO: Uniform Request method (JSON vs ?x=y)                        
             var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
+            string responseStr = "";
             try
             {
-                string responseStr = wc.UploadString(GetUri("login"), @"{ ""passive"": true }"); // Log in to get username and session key
-                dynamic response = Newtonsoft.Json.Linq.JObject.Parse(responseStr);
-
-                string username = response["name"];
-                string session = response["session"];
-
-                if (pushSocket == null)
-                {
-                    pushSocket = new WebSocket(GetWS());
-                    pushSocket.OnMessage += new EventHandler<MessageEventArgs>(pushSocket_OnMessage);
-                }
-                pushSocket.Connect(); // TODO ????
-                // TODO: This is stupid               
-                string auth_message = string.Format(@"( ""auth"": ""{0}:{1}"" )", username, session).Replace('(', '{').Replace(')', '}');
-                pushSocket.Send(auth_message);
-
-                // Connect Serial Printer
-                wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-                responseStr = wc.UploadString(GetUri("connection"), @"{ ""command"": ""connect"" }");
-
-                isConnected = true;
-                host.UpdateJobButtons();
-                con.FireConnectionChange("Connected"); // Only required only in connect, not disconnect (for some reason)
-                                                       //con.Analyzer.FireChanged();// ?
-                
-                host.ClearPrintPreview();                
-                return true;
+                responseStr = wc.UploadString(GetUri("login"), @"{ ""passive"": true }"); // Log in to get username and session key
             }
-            catch (Exception e)
+            catch (WebException e)
             {
-                isConnected = false; 
-                host.LogError(e.ToString());
+                isConnected = false;
+                if (e.Response == null)
+                    MessageBox.Show("Unable to connect to remote server", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                else
+                    switch (((HttpWebResponse)e.Response).StatusCode)
+                    {
+                        case HttpStatusCode.Forbidden:
+                            MessageBox.Show("Connection Failed: Incorrect api key", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);                        
+                            break;
+                        default:
+                            MessageBox.Show(e.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            break;
+                    }                
                 return false;
             }
+            dynamic response = Newtonsoft.Json.Linq.JObject.Parse(responseStr);
+
+            string username = response["name"];
+            string session = response["session"];
+
+            if (pushSocket == null)
+            {
+                pushSocket = new WebSocket(GetWS());
+                pushSocket.OnMessage += new EventHandler<MessageEventArgs>(pushSocket_OnMessage);
+                pushSocket.OnError   += new EventHandler<WebSocketSharp.ErrorEventArgs>(pushSocket_OnError);
+            }
+            pushSocket.Connect();            
+            string auth_message = string.Format(@"{{ ""auth"": ""{0}:{1}"" }}", username, session);
+            pushSocket.Send(auth_message); // TODO: Test if successfully connected ?s
+
+            // Connect Serial Printer
+            wc.Headers[HttpRequestHeader.ContentType] = "application/json";
+            responseStr = wc.UploadString(GetUri("connection"), @"{ ""command"": ""connect"" }");
+
+            isConnected = true;
+            host.UpdateJobButtons();
+            con.FireConnectionChange("Connected"); // Only required only in Connect, not Disconnect
+            host.ClearPrintPreview();
+            return true;
         }
         public override bool Disconnect(bool force)
         {
             // TODO: Complete
-            if (pushSocket != null) pushSocket.Close();
             isConnected = false;
+            if (pushSocket != null) pushSocket.Close();            
             return true;
+        }
+
+
+
+        public override void AnalyzeResponse(string res)
+        {
+            var test = RepetierHostExtender.basic.LogLevel.DEFAULT;
+            con.analyzeResponse(res, ref test);
+        }
+        public override void Emergency()
+        {
+            InjectManualCommandFirst("M112");
+        }
+        public override void ToggleETAMode()
+        {
+            throw new NotImplementedException();
+        }
+
+
+
+        string removeChecksumGCode(string gcodeStr)
+        {
+            if (gcodeStr.IndexOf('*') > 0)
+                return gcodeStr.Substring(0, gcodeStr.IndexOf('*'));
+            else
+                return gcodeStr;
+        }
+        private void pushSocket_OnMessage(object sender, MessageEventArgs e) // TODO: Buffer (Some log messages are skipped) ?
+        {
+            dynamic response = Newtonsoft.Json.Linq.JObject.Parse(e.Data);
+            try
+            {
+                var logs = response["current"]["logs"];
+                foreach (string logline in logs)
+                {
+                    host.LogInfo(logline);
+
+                    if (logline.StartsWith("Send: "))
+                    {
+                        con.Analyzer.Analyze(new GCode(removeChecksumGCode(logline.Remove(0, 6))), false);
+                        con.Analyzer.FireChanged();
+                    }
+                    if (logline.StartsWith("Recv: "))
+                    {
+                        var test = RepetierHostExtender.basic.LogLevel.INFO;//.DEFAULT;
+                        con.analyzeResponse(logline.Remove(0, 6), ref test);
+                    }
+                }
+            }
+            catch (Exception) { }
+        }
+        private void pushSocket_OnError(object sender, WebSocketSharp.ErrorEventArgs e)
+        {
+            if (!isConnected) return;
+            MessageBox.Show(e.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+
+
+        int periodicalCounter;
+        const int jobUpdateDivider = 10;
+        // If type is null convert to safe value for this type
+        dynamic ifNullThenZero(dynamic data)
+        {
+            if (data == null) return 0;
+            else return data;
+        }
+        dynamic ifNullThenEmpty(dynamic data)
+        {
+            if (data == null) return "";
+            else return data;
+        }
+        private dynamic getJobJSON()
+        {
+            var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
+            string responseStr;
+            try
+            {
+                responseStr = wc.DownloadString(GetUri("job"));
+            }
+            catch (WebException e)
+            {
+                Disconnect(true);
+                con.FireConnectionChange("Disconnected");
+                if (e.Response == null)
+                    MessageBox.Show("Unable to connect to remote server", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);                                
+                return null;
+            }
+            return Newtonsoft.Json.Linq.JObject.Parse(responseStr);
+        }
+        public static DateTime unixTimeStampToDateTime(double unixTimeStamp)
+        {
+            // Unix timestamp is seconds past epoch
+            System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+            return dtDateTime;
+        }
+        public override void RunPeriodicalTasks()
+        {
+            periodicalCounter++;
+            if (periodicalCounter >= 1000000)
+                periodicalCounter = 0;
+
+            if (isConnected)
+                if (periodicalCounter % jobUpdateDivider == 0)
+                {
+                    // TODO: Put into seperate thread
+                    if ((jobJson = getJobJSON()) != null)
+                    {
+                        percentDone = ifNullThenZero(jobJson["progress"]["completion"]);
+                        eta = DateTime.MinValue.AddSeconds((double)ifNullThenZero(jobJson["progress"]["printTimeLeft"])).ToString("T-%HH:%m:%s"); // TODO: Internationalize     
+                        jobStarted = unixTimeStampToDateTime((double)ifNullThenZero(jobJson["job"]["file"]["date"]));
+                        double a = ifNullThenZero(jobJson["job"]["file"]["date"]);
+                        double b = ifNullThenZero(jobJson["job"]["estimatedPrintTime"]);
+                        double c = ifNullThenZero(jobJson["progress"]["printTime"]);
+                        double d = ifNullThenZero(jobJson["progress"]["printTimeLeft"]);
+                        jobFinished = unixTimeStampToDateTime((double)(a + c + d)); // TODO: Another way not using calculation
+                        lastPrintingTime = jobFinished.ToString();
+
+                        isJobRunning = ((jobJson["state"] != "Operational") && (jobJson["state"] != "Offline"));
+                        isPaused = (jobJson["state"] == "Pausing" || jobJson["state"] == "Paused");
+                        switch ((string)jobJson["state"]) // TODO: Check if correct
+                        {
+                            case "Printing":
+                            case "Pausing":
+                            case "Paused":
+                                mode = PrintJobMode.PRINTING; break;
+                            case "Error":
+                            case "Cancelling":
+                                mode = PrintJobMode.ABORTED; break;
+                            case "Offline":
+                            case "Operational":
+                                if (ifNullThenZero(jobJson["progress"]["completion"]) == 100)
+                                    mode = PrintJobMode.FINISHED;
+                                else
+                                    mode = PrintJobMode.NO_JOB_DEFINED;
+                                break;
+                            default:
+                                mode = PrintJobMode.NO_JOB_DEFINED; break;
+                        }
+                        host.UpdateJobButtons(); // TODO: May be a potential slowdown, do conditionaly ?
+
+                        int bytesSendJob = (int)ifNullThenZero(jobJson["progress"]["filepos"]);
+                        int totalBytesJob = (int)ifNullThenZero(jobJson["job"]["file"]["size"]);
+                        // TODO: Find actual lines not bytes
+                        linesSendJob = bytesSendJob; 
+                        totalLinesJob = totalBytesJob;
+
+                        host.SetPrinterAction(string.Format("Done: {0}%", percentDone.ToString("##0.00")));
+                        host.SendProgress(ProgressType.PRINT_JOB, percentDone);                        
+                    }
+                }
         }
 
 
@@ -259,8 +336,7 @@ namespace OctoConnect
 
             Task.Run(() => UploadLocalFileAsync(filepath, filename));
 
-            con.Analyzer.drawing = true;
-            con.Analyzer.FireChanged();
+            host.ClearPrintPreview();
             host.UpdateJobButtons();
         }
         public override void KillJob()
@@ -296,99 +372,73 @@ namespace OctoConnect
 
 
 
-        int periodicalCounter;
-        const int jobUpdateDivider = 10;
-        // If type is null convert to safe value for this type
-        dynamic ifNullThenZero(dynamic data)
+        public override void InjectManualCommand(string command)
         {
-            if (data == null) return 0;
-            else return data;
-        }
-        dynamic ifNullThenEmpty(dynamic data)
-        {
-            if (data == null) return "";
-            else return data;
-        }
-        private dynamic getJobJSON()
-        {
+            if (!isConnected) return;
+            
             var wc = new WebClient(); wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-            string responseStr = wc.DownloadString(GetUri("job"));
-            return Newtonsoft.Json.Linq.JObject.Parse(responseStr);
-        }
-        public static DateTime unixTimeStampToDateTime(double unixTimeStamp)
-        {
-            // Unix timestamp is seconds past epoch
-            System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
-            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
-            return dtDateTime;
-        }
-        public override void RunPeriodicalTasks()
-        {
-            periodicalCounter++;
-            if (periodicalCounter >= 1000000)
-                periodicalCounter = 0;
-
-            if (isConnected)
-                if (periodicalCounter % jobUpdateDivider == 0)
-                {
-                    host.UpdateJobButtons();
-                    // TODO: Put into seperate thread
-                    jobJson = getJobJSON();
-
-                    //isJobRunning = (jobJson["state"] != "Operational");
-                    isJobRunning = (jobJson["state"] != "Operational");
-                    isPaused = (jobJson["state"] == "Pausing" || jobJson["state"] == "Paused");
-
-                    percentDone = ifNullThenZero(jobJson["progress"]["completion"]);                    
-                    eta = DateTime.MinValue.AddSeconds((double)ifNullThenZero(jobJson["progress"]["printTimeLeft"])).ToString("T-%H:%MM:%s"); // TODO: Internationalize     
-                    jobStarted = unixTimeStampToDateTime((double)ifNullThenZero(jobJson["job"]["file"]["date"]));
-                    double a = ifNullThenZero(jobJson["job"]["file"]["date"]);
-                    double b = ifNullThenZero(jobJson["job"]["estimatedPrintTime"]);
-                    double c = ifNullThenZero(jobJson["progress"]["printTime"]);
-                    double d = ifNullThenZero(jobJson["progress"]["printTimeLeft"]);
-                    jobFinished = unixTimeStampToDateTime((double)(a + c + d)); // TODO: Another way not using calculation
-                    lastPrintingTime = jobFinished.ToString();
-
-                    switch ((string)jobJson["state"]) // TODO: Check if correct
+            string command_message = string.Format(@"{{ ""command"": ""{0}"" }}", command);
+ 
+            try
+            {
+                wc.UploadString(GetUri("printer/command"), command_message);
+            }
+            catch (WebException e)
+            {
+                Disconnect(true);
+                con.FireConnectionChange("Disconnected");
+                if (e.Response == null)
+                    MessageBox.Show("Unable to connect to remote server", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                else
+                    switch (((HttpWebResponse)e.Response).StatusCode)
                     {
-                        case "Printing":
-                        case "Pausing":
-                        case "Paused":
-                            mode = PrintJobMode.PRINTING; break;
-                        case "Error":
-                        case "Cancelling":
-                            mode = PrintJobMode.ABORTED; break;
-                        case "Offline":
-                        case "Operational":                        
-                            if (ifNullThenZero(jobJson["progress"]["completion"]) == 100)
-                                mode = PrintJobMode.FINISHED;
-                            else
-                                mode = PrintJobMode.NO_JOB_DEFINED; 
+                        case HttpStatusCode.Conflict:
+                            MessageBox.Show("Send command failed: No printer connected to OctoPrint", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);                                                        
                             break;
                         default:
-                            mode = PrintJobMode.NO_JOB_DEFINED; break;
+                            MessageBox.Show(e.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            break;
                     }
-                    // TODO: Find actual lines not bytes
-                    int bytesSendJob = (int)ifNullThenZero(jobJson["progress"]["filepos"]);
-                    int totalBytesJob = (int)ifNullThenZero(jobJson["job"]["file"]["size"]);
-                    //linesSendJob  = (int)ifNullThenZero(jobJson["progress"]["filepos"]); 
-                    //totalLinesJob = (int)ifNullThenZero(jobJson["job"]["file"]["size"]);
-                    linesSendJob = 10;
-                    totalLinesJob = 20;
-                    /*jobGcode = host.GCodeEditor.getContent();
-                    for (int i = 0; i < jobGcode.Length; i++)
-                    {
-                        if (jobGcode[i] == '\n')
-                        {
-                            if (i < bytesSendJob) linesSendJob++; // TODO: Test for 'off by one error'
-                            totalLinesJob++;
-                        }
-                    }*/
-                    con.Analyzer.hasXHome = true;
-                    con.Analyzer.hasYHome = true;
-                    con.Analyzer.hasZHome = true;
-                    con.Analyzer.FireChanged();
-                }
+            }
+        }
+        public override void InjectManualCommandFirst(string command)
+        {
+            InjectManualCommand(command);
+        }
+        public override void InjectManualCommandReplace(string command)
+        {
+            // ?
+            InjectManualCommand(command);
+        }
+        public override void TrySendNextLine()
+        {
+            throw new NotImplementedException();
+        }
+        public override void ResendLine(int line)
+        {
+            throw new NotImplementedException();
+        }
+
+
+
+        private ManualResetEvent injectLock = new ManualResetEvent(true);
+        public override void GetInjectLock()
+        {
+            // ?            
+            try
+            {
+                injectLock.WaitOne();
+                injectLock.Reset();
+            }
+            catch (Exception ex)
+            {
+                host.SetPrinterAction(ex.ToString());
+            }
+        }
+        public override void ReturnInjectLock()
+        {
+            // ?
+            injectLock.Set();
         }
 
 
@@ -409,33 +459,6 @@ namespace OctoConnect
             key.SetString("ophostname", hostname);
             key.SetInt("opport", port);
         }
-
-
-
-        public override string Name => "OctoPrint";
-        public override string Id => "OctoConnect";
-        public override IPrintJob Job => this;
-        public override int InjectedCommands => 0;
-        bool isConnected = false;   public override bool IsConnected() => isConnected;
-        bool isJobRunning = false;  public override bool IsJobRunning() => isJobRunning;
-        bool isPaused = false;      public override bool IsPaused => isPaused;
-        //public override bool ServerConnection => true; // TODO: Decide to use or not to use server connection type
-
-
-
-        string jobGcode = "";
-        // IPrintJob interface implementation
-        float percentDone;          public float PercentDone => percentDone;
-        int linesSendJob;           public int LinesSend => linesSendJob;
-        int totalLinesJob;          public int TotalLines => totalLinesJob;
-        string eta;                 public override string ETA => eta;
-        DateTime jobStarted;        public DateTime JobStarted => jobStarted;
-        DateTime jobFinished;       public DateTime JobFinished => jobFinished;
-        PrintJobMode mode;          public PrintJobMode Mode => mode;
-        string lastPrintingTime;    public string LastPrintingTime => lastPrintingTime;        
-        public bool Caching => false;
-        public bool Exclusive => false;
-        public override bool ETAModeNormal { get => true; set => throw new NotImplementedException(); } // TODO: ?    
 
 
 

@@ -15,10 +15,15 @@ namespace OctoConnect
     {
         IHost host;
         PrinterConnectorBase connector;
+
+
+
         public OctoConnect()
         {
 
         }
+
+
 
         public void PreInitalize(IHost _host)
         {
@@ -26,15 +31,13 @@ namespace OctoConnect
             connector = new Connector(host);
             host.ActivePrinter.AddConnector(connector);
         }
-
         public void PostInitialize()
         {
-            //throw new NotImplementedException();
+            
         }
-
         public void FinializeInitialize()
         {
-            //throw new NotImplementedException();
+            
         }
     }
 }
