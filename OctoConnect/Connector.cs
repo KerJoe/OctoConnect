@@ -399,7 +399,6 @@ namespace OctoConnect
         }
         public override void LoadFromRegistry()
         {
-            // TODO: Check in begining
             Apikey = key.GetString("opapikey", apikey);
             Hostname = key.GetString("ophostname", hostname);
             Port = key.GetInt("opport", port);
@@ -459,17 +458,17 @@ namespace OctoConnect
             if (PropertyChanged != null)
                 PropertyChanged(this, e);
         }
-        string apikey; public string Apikey
+        string apikey = ""; public string Apikey
         {
             get { return apikey; }
             set { apikey = value; OnPropertyChanged(new PropertyChangedEventArgs("Apikey")); }
         }
-        int port; public int Port
+        int port = 5000; public int Port
         {
             get { return port; }
             set { port = value; OnPropertyChanged(new PropertyChangedEventArgs("Port")); }
         }
-        string hostname; public string Hostname
+        string hostname = "localhost"; public string Hostname
         {
             get { return hostname; }
             set { hostname = value; OnPropertyChanged(new PropertyChangedEventArgs("Hostname")); }

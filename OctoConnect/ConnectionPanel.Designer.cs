@@ -44,7 +44,7 @@ namespace OctoConnect
             // labelApiKey
             // 
             this.labelApiKey.AutoSize = true;
-            this.labelApiKey.Location = new System.Drawing.Point(3, 42);
+            this.labelApiKey.Location = new System.Drawing.Point(20, 15);
             this.labelApiKey.Name = "labelApiKey";
             this.labelApiKey.Size = new System.Drawing.Size(42, 13);
             this.labelApiKey.TabIndex = 0;
@@ -52,17 +52,21 @@ namespace OctoConnect
             // 
             // textBoxApiKey
             // 
-            this.textBoxApiKey.Location = new System.Drawing.Point(64, 39);
+            this.textBoxApiKey.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.textBoxApiKey.Location = new System.Drawing.Point(81, 12);
             this.textBoxApiKey.Name = "textBoxApiKey";
-            this.textBoxApiKey.Size = new System.Drawing.Size(100, 20);
+            this.textBoxApiKey.Size = new System.Drawing.Size(289, 20);
             this.textBoxApiKey.TabIndex = 1;
             this.textBoxApiKey.TextChanged += new System.EventHandler(this.textBoxApiKey_TextChanged);
             // 
             // textBoxHostname
             // 
-            this.textBoxHostname.Location = new System.Drawing.Point(64, 65);
+            this.textBoxHostname.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.textBoxHostname.Location = new System.Drawing.Point(81, 38);
             this.textBoxHostname.Name = "textBoxHostname";
-            this.textBoxHostname.Size = new System.Drawing.Size(100, 20);
+            this.textBoxHostname.Size = new System.Drawing.Size(289, 20);
             this.textBoxHostname.TabIndex = 3;
             this.textBoxHostname.Text = "localhost";
             this.textBoxHostname.TextChanged += new System.EventHandler(this.textBoxHostname_TextChanged);
@@ -70,7 +74,7 @@ namespace OctoConnect
             // labelHostname
             // 
             this.labelHostname.AutoSize = true;
-            this.labelHostname.Location = new System.Drawing.Point(3, 68);
+            this.labelHostname.Location = new System.Drawing.Point(20, 41);
             this.labelHostname.Name = "labelHostname";
             this.labelHostname.Size = new System.Drawing.Size(55, 13);
             this.labelHostname.TabIndex = 2;
@@ -79,7 +83,7 @@ namespace OctoConnect
             // labelPort
             // 
             this.labelPort.AutoSize = true;
-            this.labelPort.Location = new System.Drawing.Point(3, 94);
+            this.labelPort.Location = new System.Drawing.Point(20, 66);
             this.labelPort.Name = "labelPort";
             this.labelPort.Size = new System.Drawing.Size(26, 13);
             this.labelPort.TabIndex = 4;
@@ -91,14 +95,14 @@ namespace OctoConnect
             // 
             // numericUpDownPort
             // 
-            this.numericUpDownPort.Location = new System.Drawing.Point(64, 94);
+            this.numericUpDownPort.Location = new System.Drawing.Point(81, 64);
             this.numericUpDownPort.Maximum = new decimal(new int[] {
             65535,
             0,
             0,
             0});
             this.numericUpDownPort.Name = "numericUpDownPort";
-            this.numericUpDownPort.Size = new System.Drawing.Size(100, 20);
+            this.numericUpDownPort.Size = new System.Drawing.Size(87, 20);
             this.numericUpDownPort.TabIndex = 6;
             this.numericUpDownPort.Value = new decimal(new int[] {
             5000,
