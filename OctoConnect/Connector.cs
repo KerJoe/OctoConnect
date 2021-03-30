@@ -145,6 +145,7 @@ namespace OctoConnect
             wc.Headers[HttpRequestHeader.ContentType] = "application/json";
             responseStr = wc.UploadString(GetUri("connection"), @"{ ""command"": ""connect"" }");
 
+            // TODO: Check if printer connected before sending connection changed
             isConnected = true;
             host.UpdateJobButtons();
             con.FireConnectionChange("Connected"); // Only required in Connect, not Disconnect
@@ -167,6 +168,7 @@ namespace OctoConnect
         }
         public override void Emergency()
         {
+            // TODO: Reconnect after stop
             InjectManualCommandFirst("M112");
         }
         public override void ToggleETAMode()
@@ -189,6 +191,8 @@ namespace OctoConnect
             try
             {
                 var logs = response["current"]["logs"];
+                if (logs != null) if (logs.Count > 1)
+                    ;
                 foreach (string logline in logs)
                 {
                     host.LogInfo(logline);
@@ -196,7 +200,6 @@ namespace OctoConnect
                     if (logline.StartsWith("Send: "))
                     {
                         con.Analyzer.Analyze(new GCode(removeChecksumGCode(logline.Remove(0, 6))), false);
-                        con.Analyzer.FireChanged();
                     }
                     if (logline.StartsWith("Recv: "))
                     {
@@ -253,6 +256,56 @@ namespace OctoConnect
             dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
             return dtDateTime;
         }
+        async void updateJobAsync()
+        {
+            if ((jobJson = getJobJSON()) != null)
+            {
+                percentDone = ifNullThenZero(jobJson["progress"]["completion"]);
+                eta = DateTime.MinValue.AddSeconds((double)ifNullThenZero(jobJson["progress"]["printTimeLeft"])).ToString("T-HH:mm:ss"); // TODO: Internationalize     
+                jobStarted = unixTimeStampToDateTime((double)ifNullThenZero(jobJson["job"]["file"]["date"]));
+                double a = ifNullThenZero(jobJson["job"]["file"]["date"]);
+                double b = ifNullThenZero(jobJson["job"]["estimatedPrintTime"]);
+                double c = ifNullThenZero(jobJson["progress"]["printTime"]);
+                double d = ifNullThenZero(jobJson["progress"]["printTimeLeft"]);
+                jobFinished = unixTimeStampToDateTime((double)(a + c + d)); // TODO: Another way not using calculation
+                lastPrintingTime = jobFinished.ToString();
+
+                isJobRunning = ((jobJson["state"] != "Operational") && (jobJson["state"] != "Offline"));
+                isPaused = (jobJson["state"] == "Pausing" || jobJson["state"] == "Paused");
+                switch ((string)jobJson["state"]) // TODO: Check if correct
+                {
+                    case "Printing":
+                    case "Pausing":
+                    case "Paused":
+                        mode = PrintJobMode.PRINTING; break;
+                    case "Error":
+                    case "Cancelling":
+                        mode = PrintJobMode.ABORTED; break;
+                    case "Offline":
+                    case "Operational":
+                        if (ifNullThenZero(jobJson["progress"]["completion"]) == 100)
+                            mode = PrintJobMode.FINISHED;
+                        else
+                            mode = PrintJobMode.NO_JOB_DEFINED;
+                        break;
+                    default:
+                        mode = PrintJobMode.NO_JOB_DEFINED; break;
+                }
+                host.UpdateJobButtons(); // TODO: May be a potential slowdown, do conditionaly ?
+
+                int bytesSendJob = (int)ifNullThenZero(jobJson["progress"]["filepos"]);
+                int totalBytesJob = (int)ifNullThenZero(jobJson["job"]["file"]["size"]);
+                // TODO: Find actual lines not bytes
+                linesSendJob = bytesSendJob;
+                totalLinesJob = totalBytesJob;
+
+                host.SetPrinterAction(string.Format("Done: {0}%", percentDone.ToString("##0.00")));
+                host.SendProgress(ProgressType.PRINT_JOB, percentDone);
+                
+                // TODO: If we are in a job assume we are homed
+            }
+        }
+        Task updateJobAsyncTask;
         public override void RunPeriodicalTasks()
         {
             periodicalCounter++;
@@ -260,54 +313,14 @@ namespace OctoConnect
                 periodicalCounter = 0;
 
             if (isConnected)
-                if (periodicalCounter % jobUpdateDivider == 0)
+            {
+                if (updateJobAsyncTask == null)
+                    updateJobAsyncTask = Task.Run(() => updateJobAsync());
+                if (updateJobAsyncTask.Status == TaskStatus.RanToCompletion)
                 {
-                    // TODO: Put into seperate thread
-                    if ((jobJson = getJobJSON()) != null)
-                    {
-                        percentDone = ifNullThenZero(jobJson["progress"]["completion"]);
-                        eta = DateTime.MinValue.AddSeconds((double)ifNullThenZero(jobJson["progress"]["printTimeLeft"])).ToString("T-%HH:%m:%s"); // TODO: Internationalize     
-                        jobStarted = unixTimeStampToDateTime((double)ifNullThenZero(jobJson["job"]["file"]["date"]));
-                        double a = ifNullThenZero(jobJson["job"]["file"]["date"]);
-                        double b = ifNullThenZero(jobJson["job"]["estimatedPrintTime"]);
-                        double c = ifNullThenZero(jobJson["progress"]["printTime"]);
-                        double d = ifNullThenZero(jobJson["progress"]["printTimeLeft"]);
-                        jobFinished = unixTimeStampToDateTime((double)(a + c + d)); // TODO: Another way not using calculation
-                        lastPrintingTime = jobFinished.ToString();
-
-                        isJobRunning = ((jobJson["state"] != "Operational") && (jobJson["state"] != "Offline"));
-                        isPaused = (jobJson["state"] == "Pausing" || jobJson["state"] == "Paused");
-                        switch ((string)jobJson["state"]) // TODO: Check if correct
-                        {
-                            case "Printing":
-                            case "Pausing":
-                            case "Paused":
-                                mode = PrintJobMode.PRINTING; break;
-                            case "Error":
-                            case "Cancelling":
-                                mode = PrintJobMode.ABORTED; break;
-                            case "Offline":
-                            case "Operational":
-                                if (ifNullThenZero(jobJson["progress"]["completion"]) == 100)
-                                    mode = PrintJobMode.FINISHED;
-                                else
-                                    mode = PrintJobMode.NO_JOB_DEFINED;
-                                break;
-                            default:
-                                mode = PrintJobMode.NO_JOB_DEFINED; break;
-                        }
-                        host.UpdateJobButtons(); // TODO: May be a potential slowdown, do conditionaly ?
-
-                        int bytesSendJob = (int)ifNullThenZero(jobJson["progress"]["filepos"]);
-                        int totalBytesJob = (int)ifNullThenZero(jobJson["job"]["file"]["size"]);
-                        // TODO: Find actual lines not bytes
-                        linesSendJob = bytesSendJob; 
-                        totalLinesJob = totalBytesJob;
-
-                        host.SetPrinterAction(string.Format("Done: {0}%", percentDone.ToString("##0.00")));
-                        host.SendProgress(ProgressType.PRINT_JOB, percentDone);                        
-                    }
+                    updateJobAsyncTask = Task.Run(() => updateJobAsync());
                 }
+            }
         }
 
 
