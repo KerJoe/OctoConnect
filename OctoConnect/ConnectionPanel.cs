@@ -46,6 +46,12 @@ namespace OctoConnect
             con.Port = (int)numericUpDownPort.Value;
         }
 
+        private void checkBoxSsl_CheckedChanged(object sender, EventArgs e)
+        {
+            if (updating) return;
+            con.UseSsl = checkBoxSsl.Checked;
+        }
+
         bool updating;
         private void bindingConnection_CurrentItemChanged(object sender, EventArgs e)
         {
@@ -53,6 +59,7 @@ namespace OctoConnect
             textBoxApiKey.Text = con.Apikey;
             textBoxHostname.Text = con.Hostname;
             numericUpDownPort.Value = con.Port;
+            checkBoxSsl.Checked = con.UseSsl;
             updating = false;
         }
     }

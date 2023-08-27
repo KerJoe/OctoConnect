@@ -37,6 +37,7 @@ namespace OctoConnect
             this.labelPort = new System.Windows.Forms.Label();
             this.bindingConnection = new System.Windows.Forms.BindingSource(this.components);
             this.numericUpDownPort = new System.Windows.Forms.NumericUpDown();
+            this.checkBoxSsl = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.bindingConnection)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
             this.SuspendLayout();
@@ -111,10 +112,22 @@ namespace OctoConnect
             0});
             this.numericUpDownPort.ValueChanged += new System.EventHandler(this.numericUpDownPort_ValueChanged);
             // 
+            // checkBoxSsl
+            // 
+            this.checkBoxSsl.AutoSize = true;
+            this.checkBoxSsl.Location = new System.Drawing.Point(174, 66);
+            this.checkBoxSsl.Name = "checkBoxSsl";
+            this.checkBoxSsl.Size = new System.Drawing.Size(133, 17);
+            this.checkBoxSsl.TabIndex = 7;
+            this.checkBoxSsl.Text = "Connect using HTTPS";
+            this.checkBoxSsl.UseVisualStyleBackColor = true;
+            this.checkBoxSsl.CheckedChanged += new System.EventHandler(this.checkBoxSsl_CheckedChanged);
+            // 
             // ConnectionPanel
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.checkBoxSsl);
             this.Controls.Add(this.numericUpDownPort);
             this.Controls.Add(this.labelPort);
             this.Controls.Add(this.textBoxHostname);
@@ -139,5 +152,6 @@ namespace OctoConnect
         private System.Windows.Forms.Label labelPort;
         private System.Windows.Forms.BindingSource bindingConnection;
         private System.Windows.Forms.NumericUpDown numericUpDownPort;
+        private System.Windows.Forms.CheckBox checkBoxSsl;
     }
 }

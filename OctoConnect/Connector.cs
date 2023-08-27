@@ -101,14 +101,14 @@ namespace OctoConnect
         {
             var wc = new WebClient();
             wc.Headers["X-Api-Key"] = apikey; wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-            string response = wc.DownloadString(string.Format(@"http://{0}:{1}/api/{2}?apikey={3}", hostname, port, apiname, apikey));
+            string response = wc.DownloadString(string.Format(@"{0}://{1}:{2}/api/{3}?apikey={4}", usessl ? "https" : "http", hostname, port, apiname, apikey));
             return JObject.Parse(response == "" ? "{}" : response); // Parse method doesn't accept an empty string, so instead we give it an empty JSON
         }
         dynamic postOctoPrintJSON(string apiname, string json = "")
         {
             var wc = new WebClient();
             wc.Headers["X-Api-Key"] = apikey; wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-            string response = wc.UploadString(string.Format(@"http://{0}:{1}/api/{2}", hostname, port, apiname), json);
+            string response = wc.UploadString(string.Format(@"{0}://{1}:{2}/api/{3}", usessl ? "https" : "http", hostname, port, apiname), json);
             return JObject.Parse(response == "" ? "{}" : response);
         }
         float uploadPercentDone = 0;
@@ -119,7 +119,7 @@ namespace OctoConnect
             wc.UploadProgressChanged += (o, e) => uploadPercentDone = ((float)e.BytesSent / e.TotalBytesToSend) * 100; // ProgressPercentage is int, not double
             wc.UploadFileCompleted += (o, e) => uploadDone = true;
             wc.Headers["X-Api-Key"] = apikey;
-            return wc.UploadFileTaskAsync(new Uri(string.Format(@"http://{0}:{1}/api/files/local", hostname, port)), filepath);
+            return wc.UploadFileTaskAsync(new Uri(string.Format(@"{0}://{1}:{2}/api/files/local", usessl ? "https" : "http", hostname, port)), filepath);
         }
         bool connectToPrinter()
         {
@@ -187,7 +187,7 @@ namespace OctoConnect
             string username = loginResponse["name"];
             string session = loginResponse["session"];
 
-            string websocketUri = string.Format(@"ws://{0}:{1}/sockjs/websocket", hostname, port);
+            string websocketUri = string.Format(@"{0}://{1}:{2}/sockjs/websocket", usessl ? "wss" : "ws", hostname, port);
             if (pushSocket != null)
                 if (pushSocket.Url.ToString() != websocketUri) // Test if address in panel changed            
                 {
@@ -545,12 +545,14 @@ namespace OctoConnect
             Apikey = key.GetString("opapikey", apikey);
             Hostname = key.GetString("ophostname", hostname);
             Port = key.GetInt("opport", port);
+            UseSsl = key.GetBool("opusessl", usessl);
         }
         public override void SaveToRegistry()
         {
             key.SetString("opapikey", apikey == null ? "" : apikey);
             key.SetString("ophostname", hostname);
             key.SetInt("opport", port);
+            key.SetBool("opusessl", usessl);
         }
 
 
@@ -588,6 +590,12 @@ namespace OctoConnect
         {
             get { return hostname; }
             set { hostname = value; OnPropertyChanged(new PropertyChangedEventArgs("Hostname")); }
+        }
+
+        bool usessl = false; public bool UseSsl
+        {
+            get { return usessl; }
+            set { usessl = value; OnPropertyChanged(new PropertyChangedEventArgs("UseSsl")); }
         }
     }
 }

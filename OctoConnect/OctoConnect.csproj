@@ -32,10 +32,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\..\..\..\..\Programs\Repetier-Host\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\Program Files\Repetier-Host\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="RepetierHostExtender">
-      <HintPath>..\..\..\..\..\..\Programs\Repetier-Host\RepetierHostExtender.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\Program Files\Repetier-Host\RepetierHostExtender.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -48,7 +48,7 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
     <Reference Include="websocket-sharp">
-      <HintPath>..\..\..\..\..\..\Programs\Repetier-Host\plugins\RepetierServerConnector\websocket-sharp.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\Program Files\Repetier-Host\plugins\RepetierServerConnector\websocket-sharp.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
